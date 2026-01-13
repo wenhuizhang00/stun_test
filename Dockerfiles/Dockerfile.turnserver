@@ -1,0 +1,54 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    coturn ca-certificates iproute2 \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /etc/coturn && \
+    printf '%s\n' \
+      'listening-port=3478' \
+      'listening-ip=0.0.0.0' \
+      '' \
+      'min-port=49160' \
+      'max-port=49200' \
+      '' \
+      'fingerprint' \
+      'lt-cred-mech' \
+      'realm=myrealm' \
+      'user=demo:demo' \
+      '' \
+      'log-file=stdout' \
+      'simple-log' \
+      'no-cli' \
+    > /etc/coturn/turnserver.conf
+
+RUN printf '%s\n' \
+'#!/bin/sh' \
+'set -eu' \
+'' \
+'LISTEN_IP="${LISTEN_IP:-0.0.0.0}"' \
+'RELAY_IP="${RELAY_IP:-}"' \
+'REALM="${REALM:-myrealm}"' \
+'TURN_USER="${TURN_USER:-demo}"' \
+'TURN_PASS="${TURN_PASS:-demo}"' \
+'' \
+'echo "=== coturn server ==="' \
+'echo "LISTEN_IP=${LISTEN_IP}"' \
+'[ -n "${RELAY_IP}" ] && echo "RELAY_IP=${RELAY_IP}"' \
+'echo "REALM=${REALM}"' \
+'echo "USER=${TURN_USER}"' \
+'echo "====================="' \
+'' \
+'ARGS="-c /etc/coturn/turnserver.conf -a -v -r ${REALM} -u ${TURN_USER}:${TURN_PASS} -L ${LISTEN_IP}"' \
+'if [ -n "${RELAY_IP}" ]; then ARGS="${ARGS} -E ${RELAY_IP}"; fi' \
+'' \
+'exec turnserver ${ARGS}' \
+> /usr/local/bin/start-turnserver.sh && chmod +x /usr/local/bin/start-turnserver.sh
+
+EXPOSE 3478/tcp 3478/udp
+EXPOSE 49160-49200/udp 49160-49200/tcp
+
+ENTRYPOINT ["/usr/local/bin/start-turnserver.sh"]
+

@@ -1,0 +1,55 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    coturn ca-certificates iproute2 coreutils bash\
+ && rm -rf /var/lib/apt/lists/*
+
+# 说明：
+# - 去掉 stunclient
+# - 默认容器前台运行 turnutils_uclient（docker logs 可读）
+# - 可选：用 LOG_INTERVAL 控制过滤/节流（不建议过滤就让它原样输出）
+RUN printf '%s\n' \
+'#!/usr/bin/env bash' \
+'set -euo pipefail' \
+'' \
+'SERVER_HOST="${SERVER_HOST:-10.244.0.24}"' \
+'SERVER_PORT="${SERVER_PORT:-3478}"' \
+'' \
+'LOCAL_IP="${LOCAL_IP:-}"' \
+'TURN_USER="${TURN_USER:-demo}"' \
+'TURN_PASS="${TURN_PASS:-demo}"' \
+'REALM="${REALM:-myrealm}"' \
+'' \
+'PACKETS="${PACKETS:-100000000}"' \
+'VERBOSE="${VERBOSE:-1}"' \
+'Y_FLAG="${Y_FLAG:-1}"' \
+'' \
+'echo "=== turn client (TURN-only) ==="' \
+'echo "SERVER=${SERVER_HOST}:${SERVER_PORT}"' \
+'[ -n "${LOCAL_IP}" ] && echo "LOCAL_IP=${LOCAL_IP}"' \
+'echo "REALM=${REALM}"' \
+'echo "USER=${TURN_USER}"' \
+'echo "PACKETS=${PACKETS}"' \
+'echo "Y_FLAG=${Y_FLAG}  (1 means add -y)"' \
+'echo "==============================="' \
+'' \
+'BASE_ARGS=""' \
+'[ "${VERBOSE}" = "1" ] && BASE_ARGS="${BASE_ARGS} -v"' \
+'[ -n "${LOCAL_IP}" ] && BASE_ARGS="${BASE_ARGS} -L ${LOCAL_IP}"' \
+'' \
+'YARGS=""' \
+'[ "${Y_FLAG}" = "1" ] && YARGS="-y"' \
+'' \
+'# Run in foreground so logs are visible via: docker logs -f <container>' \
+'# Use exec so signals (Ctrl+C / docker stop) reach the process.' \
+'exec turnutils_uclient ${BASE_ARGS} \' \
+'  -n "${PACKETS}" -p "${SERVER_PORT}" \' \
+'  -u "${TURN_USER}" -w "${TURN_PASS}" -r "${REALM}" \' \
+'  ${YARGS} \' \
+'  "${SERVER_HOST}"' \
+> /usr/local/bin/run-client.sh && chmod +x /usr/local/bin/run-client.sh
+
+ENTRYPOINT ["/usr/local/bin/run-client.sh"]
+
