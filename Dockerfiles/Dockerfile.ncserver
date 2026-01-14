@@ -1,0 +1,43 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    netcat-openbsd tcpdump iproute2 coreutils \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN printf '%s\n' \
+'#!/usr/bin/env bash' \
+'set -euo pipefail' \
+'' \
+'PORT="${PORT:-3478}"' \
+'IFACE="${IFACE:-any}"' \
+'' \
+'echo "[server] starting"' \
+'echo "[server] listen udp port=${PORT} iface=${IFACE}"' \
+'echo "[server] ips:"' \
+'ip -4 -o addr show scope global | awk "{print \"  \" \$2 \"  \" \$4}"' \
+'' \
+'echo "[server] tcpdump: showing udp port ${PORT} (src/dst + len)..."' \
+'# -l: line buffered, -n: no DNS, -tt: timestamps, -vv: verbose, -i any: all ifaces' \
+'tcpdump -i "${IFACE}" -n -tt -vv "udp port ${PORT}" -l 2>&1 & ' \
+'TCPDUMP_PID=$!' \
+'' \
+'cleanup() {' \
+'  echo "[server] stopping tcpdump (pid=${TCPDUMP_PID})"' \
+'  kill "${TCPDUMP_PID}" >/dev/null 2>&1 || true' \
+'}' \
+'trap cleanup EXIT INT TERM' \
+'' \
+'echo "[server] nc: dumping received payload (first 256 bytes in hex)..."' \
+'echo "[server] ----"' \
+'# Keep listening; print payload bytes for sanity-check.' \
+'while true; do' \
+'  timeout 3600s nc -u -l -p "${PORT}" -w 1 | head -c 256 | od -An -tx1' \
+'done' \
+> /usr/local/bin/run-server.sh && chmod +x /usr/local/bin/run-server.sh
+
+EXPOSE 3478/udp
+
+ENTRYPOINT ["/usr/local/bin/run-server.sh"]
+

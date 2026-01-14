@@ -22,7 +22,7 @@ RUN printf '%s\n' \
 'TURN_PASS="${TURN_PASS:-demo}"' \
 'REALM="${REALM:-myrealm}"' \
 '' \
-'PACKETS="${PACKETS:-100000000}"' \
+'PACKETS="${PACKETS:-100000000000}"' \
 'VERBOSE="${VERBOSE:-1}"' \
 'Y_FLAG="${Y_FLAG:-1}"' \
 '' \

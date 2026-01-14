@@ -1,0 +1,38 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    netcat-openbsd iproute2 coreutils \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN printf '%s\n' \
+'#!/usr/bin/env bash' \
+'set -euo pipefail' \
+'' \
+'DST_HOST="${DST_HOST:-10.244.0.24}"' \
+'DST_PORT="${DST_PORT:-3478}"' \
+'COUNT="${COUNT:-1000}"' \
+'PPS="${PPS:-100}"' \
+'PAYLOAD_BYTES="${PAYLOAD_BYTES:-64}"' \
+'' \
+'me="$(ip -4 -o addr show scope global | awk "{print \$4}" | head -n1)"' \
+'echo "[client] src_ip=${me:-unknown}"' \
+'echo "[client] dst=${DST_HOST}:${DST_PORT} count=${COUNT} pps=${PPS} payload_bytes=${PAYLOAD_BYTES}"' \
+'' \
+'interval_s=$(awk -v pps="$PPS" "BEGIN{ if (pps<=0) pps=1; print 1/pps }")' \
+'' \
+'for i in $(seq 1 "${COUNT}"); do' \
+'  # payload: seq + timestamp + random bytes (base64)' \
+'  rnd="$(head -c "${PAYLOAD_BYTES}" /dev/urandom | base64 | tr -d "\n")"' \
+'  msg="seq=${i} ts=$(date -Is) data=${rnd}"' \
+'  printf "%s\n" "${msg}" | nc -u -w 1 "${DST_HOST}" "${DST_PORT}" || true' \
+'  # pacing' \
+'  sleep "${interval_s}"' \
+'done' \
+'' \
+'echo "[client] done"' \
+> /usr/local/bin/run-client.sh && chmod +x /usr/local/bin/run-client.sh
+
+ENTRYPOINT ["/usr/local/bin/run-client.sh"]
+

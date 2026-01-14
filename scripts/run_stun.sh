@@ -20,7 +20,7 @@ TURN_USER="${TURN_USER:-demo}"
 TURN_PASS="${TURN_PASS:-demo}"
 
 # Client load
-PACKETS="${PACKETS:-10}"
+PACKETS="${PACKETS:-10000}"
 
 usage() {
   cat <<EOF
